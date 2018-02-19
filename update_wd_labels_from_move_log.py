@@ -1,3 +1,6 @@
+# Task description:
+# https://www.wikidata.org/wiki/Wikidata:Requests_for_permissions/Bot/DanmicholoBot_8
+
 import re
 import logging
 import pywikibot
@@ -46,11 +49,15 @@ wdsite = pywikibot.Site('wikidata', 'wikidata')
 repo = wdsite.data_repository()
 
 
-def lcfirst(string):
-    return string[0].lower() + string[1:]
+def lcfirst(title):
+    if type(title) is list:
+        return [lcfirst(x) for x in title]
+    if type(title) is set:
+        return set([lcfirst(x) for x in title])
+    return title[0].lower() + title[1:]
 
 
-def set_label(item, label):
+def set_label(item, label, add_alias=True):
     current_label = item.labels.get(lang)
     if current_label == label:
         return
@@ -69,7 +76,7 @@ def set_label(item, label):
                 log.warning('Label includes "%s" -- please verify manually!' % di)
 
         item.editLabels({lang: label}, summary='Changing label to reflect page move on %swiki' % siteid)
-        if current_label not in item.aliases.get(lang, []):
+        if add_alias and current_label not in item.aliases.get(lang, []):
             item.aliases[lang] = item.aliases.get(lang, []) + [current_label]
             item.editAliases(item.aliases)
 
@@ -84,10 +91,7 @@ for source in pagegenerators.PreloadingGenerator(gen, groupsize=50):
     target_title = target.title()
 
     redirect_titles = set([p.title() for p in target.backlinks(filterRedirects='redirects')])
-    redirect_titles.add(source_title)
     redirect_titles = [dont_introduce_regexp.split(x)[0] for x in redirect_titles]
-
-    redirect_titles_lcfirst = [lcfirst(title) for title in redirect_titles]
 
     try:
         item = target.data_item()
@@ -98,20 +102,28 @@ for source in pagegenerators.PreloadingGenerator(gen, groupsize=50):
     # The current label at Wikidata
     current_label = item.labels.get(lang)
 
-    if current_label in redirect_titles:
+    if current_label is None:
+        log.info('%s: ADD label "%s"', item.id, target_title)
+        item.editLabels({lang: target_title}, summary='Add label from %swiki' % siteid)
+
+    elif current_label in redirect_titles:
         # The current Wikidata label matches one of the redirect page title.
         # We will change the Wikidata label to match the current page title.
         set_label(item, target_title)
 
-    elif current_label in redirect_titles_lcfirst:
+    elif current_label in lcfirst(redirect_titles):
         # The current Wikidata label matches one of the redirect page title with
         # the first character lowercased. We will change the Wikidata label to match
         # the current page title, preservering the case of the first character.
         set_label(item, lcfirst(target_title))
 
-    elif current_label is None:
-        log.info('%s: ADD label "%s"', item.id, target_title)
-        item.editLabels({lang: target_title}, summary='Add label from %swiki' % siteid)
+    elif current_label == source_title:
+        # The page was moved without leaving a redirect
+        set_label(item, target_title, False)
+
+    elif current_label == lcfirst(source_title):
+        # The page was moved without leaving a redirect
+        set_label(item, lcfirst(target_title), False)
 
     elif current_label != target_title and current_label != lcfirst(target_title):
         log.info('Page "%s" moved to "%s". WD label is "%s". Not sure what to do.',
