@@ -27,6 +27,16 @@ configs = {
         'siteid': 'sv',
         'lang': 'sv',
         'dont_introduce': [' (', ', ', '#'],
+    },
+    'da': {
+        'siteid': 'da',
+        'lang': 'da',
+        'dont_introduce': [' (', ' i '],
+    },
+    'en': {
+        'siteid': 'en',
+        'lang': 'en',
+        'dont_introduce': [' ('], # , ' in '],
     }
 }
 
